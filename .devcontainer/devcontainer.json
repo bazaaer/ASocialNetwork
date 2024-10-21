@@ -1,7 +1,7 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/python
 {
-	"name": "Klopta dev container",
+	"name": "ASocialNetwork",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"dockerComposeFile": ["docker-compose.yml"],
 	"service": "python",
@@ -14,7 +14,7 @@
 	"forwardPorts": [5000],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "pip3 install --user -r backend/requirements.txt",
+	"postCreateCommand": "pip3 install --user -r requirements.txt",
 	"customizations": {
 		"vscode": {
 			"extensions": [
