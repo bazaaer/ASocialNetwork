@@ -1,0 +1,9 @@
+Flask
+openai
+flask-cors
+gunicorn
+gevent
+pymongo
+python-dotenv
+bcrypt
+Flask-JWT-Extended
