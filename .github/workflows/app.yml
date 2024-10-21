@@ -34,4 +34,4 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/ASocialNetwork-api:latest
+          tags: ghcr.io/${{ github.repository_owner }}/asocialnetwork-api:latest
