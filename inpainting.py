@@ -12,20 +12,13 @@ a function to add / modify items from an image                              - in
 this file is part of the project SAE S5.A.01, and is property of the IUT of Lens, France.
 """
 
-import torch
-import requests
-import PIL
 from io import BytesIO
 from matplotlib import pyplot as plt
-import cv2                                  # NO FUCKING CLUE WHAT DOES THIS DO
-import base64, os
+import base64, os, cv2, io, torch, requests, PIL
 from IPython.display import HTML, Image
-from google.colab.output import eval_js     # AH SHIT GOTTA SWITCH THAT
 from base64 import b64decode
 import numpy as np
 import shutil
-from time import sleep
-import time
 from transformers import CLIPSegProcessor, CLIPSegForImageSegmentation
 
 def get_requirements():
@@ -45,7 +38,6 @@ def get_device():
     getter for the device used by the machine. Works only with Nvidia GPUs (aka CUDA)
     :return:str the device used by the machine
     """
-
     device = (
         "mps"
         if torch.backends.mps.is_available()
@@ -55,29 +47,135 @@ def get_device():
     )
     return device
 
+def init_pipe():
+    """
+    Initilialises the pipe using the brushnet model
+    :return:StableDiffusionPowerPaintBrushNetPipeline the pipe for image modification
+    """
+    import sys
+    import os
+    sys.path.insert(0, os.path.join("/content/PowerPaint"))
+
+    from safetensors.torch import load_model, save_model
+    import numpy as np
+    from PIL import Image, ImageOps
+    from transformers import CLIPTextModel, CLIPTokenizer
+    from diffusers.utils import load_image
+    from diffusers import DPMSolverMultistepScheduler
+
+    from powerpaint.models.BrushNet_CA import BrushNetModel
+    from powerpaint.pipelines.pipeline_PowerPaint_Brushnet_CA import (
+        StableDiffusionPowerPaintBrushNetPipeline,
+    )
+    # from powerpaint.power_paint_tokenizer import PowerPaintTokenizer
+    from powerpaint.models.unet_2d_condition import UNet2DConditionModel
+    from powerpaint.utils.utils import TokenizerWrapper, add_tokens
+    from diffusers import UniPCMultistepScheduler
+
+    checkpoint_dir = "/content/checkpoints"
+    local_files_only = True
+
+    # brushnet-based version
+    unet = UNet2DConditionModel.from_pretrained(
+        "CompVis/stable-diffusion-v1-4",
+        subfolder="unet",
+        revision=None,
+        torch_dtype=torch.float16,
+        local_files_only=False,
+    )
+    text_encoder_brushnet = CLIPTextModel.from_pretrained(
+        "CompVis/stable-diffusion-v1-4",
+        subfolder="text_encoder",
+        revision=None,
+        torch_dtype=torch.float16,
+        local_files_only=False,
+    )
+    brushnet = BrushNetModel.from_unet(unet)
+    base_model_path = os.path.join(checkpoint_dir, "realisticVisionV60B1_v51VAE")
+    pipe = StableDiffusionPowerPaintBrushNetPipeline.from_pretrained(
+        base_model_path,
+        brushnet=brushnet,
+        text_encoder_brushnet=text_encoder_brushnet,
+        torch_dtype=torch.float16,
+        low_cpu_mem_usage=False,
+        safety_checker=None,
+    )
+    pipe.unet = UNet2DConditionModel.from_pretrained(
+        base_model_path,
+        subfolder="unet",
+        revision=None,
+        torch_dtype=torch.float16,
+        local_files_only=local_files_only,
+    )
+    pipe.tokenizer = TokenizerWrapper(
+        from_pretrained=base_model_path,
+        subfolder="tokenizer",
+        revision=None,
+        torch_type=torch.float16,
+        local_files_only=local_files_only,
+    )
+
+    # add learned task tokens into the tokenizer
+    add_tokens(
+        tokenizer=pipe.tokenizer,
+        text_encoder=pipe.text_encoder_brushnet,
+        placeholder_tokens=["P_ctxt", "P_shape", "P_obj"],
+        initialize_tokens=["a", "a", "a"],
+        num_vectors_per_token=10,
+    )
+    load_model(
+        pipe.brushnet,
+        os.path.join(checkpoint_dir, "PowerPaint_Brushnet/diffusion_pytorch_model.safetensors"),
+    )
+
+    pipe.text_encoder_brushnet.load_state_dict(
+        torch.load(os.path.join(checkpoint_dir, "PowerPaint_Brushnet/pytorch_model.bin")), strict=False
+    )
+
+    pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
+
+    pipe.enable_model_cpu_offload()
+    pipe = pipe.to("cuda")
+
+    return pipe
+
 def get_pipe():
     """
     getter for the inpainting pipe (the thing that generates the images)
-    if the pipe has already been initialised somewhere, it returns it. Otherwise, it initialises it and returns it afterwards.
-    :return:StableDiffusionInpaintPipeline the inpainting pipe
+    if the pipe has not already been initialised before, it does it.
+    :return:StableDiffusionPowerPaintBrushNetPipeline the inpainting pipe
     """
-    global inpainting_pipe
     try :
+        global inpainting_pipe
         inpainting_pipe
     except :
-        from diffusers import StableDiffusionInpaintPipeline
+        inpainting_pipe = init_pipe()
 
-        inpaiting_pipe = StableDiffusionInpaintPipeline.from_pretrained("stabilityai/stable-diffusion-2-inpainting")
-        inpaiting_pipe = inpaiting_pipe.to(get_device())
+def get_processor():
+    """
+    getter for the mask maker processor (to automatically generate masks)
+    initialises the processor if it has not been yet
+    :return:CLIPSegProcessor the processor
+    """
+    try:
+        global processor
+        processor
+    except :
+        processor = CLIPSegProcessor.from_pretrained("CIDAS/clipseg-rd64-refined")
+    return processor
 
-def download_image(url):
+def get_mask_making_model():
     """
-    downloads and return the image associated to the given URL
-    :param url:str the URL of the desired image
-    :return:PIL.Image the image using the PIL module
+    getter for the mask maker model (to automatically generate masks)
+    initialises the model if it has not been yet
+    :return:CLIPSegForImageSegmentation the model
     """
-    response = requests.get(url)
-    return PIL.Image.open(BytesIO(response.content)).convert("RGB")
+    try:
+        global model
+        model
+    except:
+        model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd64-refined")
+    return model
 
 def image_grid(imgs, rows, cols):
     """
@@ -97,27 +195,28 @@ def image_grid(imgs, rows, cols):
         grid.paste(img, box=(i%cols*w, i//cols*h))
     return grid
 
-def generate_mask_image(init_image, mask_prompt, out_fpath, debug=False):
+def is_empty_mask(mask_image):
     """
+    checks if the given image is only black pixels (meaning the mask is empty)
+    :param mask_image:PILImage the given mask image
+    :return:bool whether or not the mask is empty
+    """
+    return cv2.countNonZero(mask_image) == 0
 
+
+def generate_mask_image(init_image, mask_prompt, out_fpath):
+    """
+    generates a mask automatically based on the given 'mask_prompt' and returns it
     :param init_image:PIL.Image the image inputed by the user
     :param mask_prompt:list[str] the user prompt to used to identify the mask (at least 2 words)
     :param out_fpath:str the name of the file that contains the mask
-    :param debug:bool whether or not to enable debug mode
     :return:PIL.Image the mask for the image modification
     """
     assert len(mask_prompt) > 1 , "ERR : mask_prompt maust contain at least 2 keywords"
-    try:
-        global processor
-        processor
-    except :
-        processor = CLIPSegProcessor.from_pretrained("CIDAS/clipseg-rd64-refined")
 
-    try:
-        global model
-        model
-    except:
-        model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd64-refined")
+    processor = get_processor()
+
+    model = get_mask_making_model()
 
     temp_fpath = f"temp.png"
     if isinstance(mask_prompt, str):
@@ -132,15 +231,6 @@ def generate_mask_image(init_image, mask_prompt, out_fpath, debug=False):
         outputs = model(**inputs)
 
     preds = outputs.logits.unsqueeze(1)
-
-    # visualize prediction
-    if debug:
-        _, ax = plt.subplots(1, 5, figsize=(15, len(mask_prompt) + 1))
-        [a.axis('off') for a in ax.flatten()]
-        ax[0].imshow(init_image)
-        print(torch.sigmoid(preds[0][0]).shape)
-        [ax[i + 1].imshow(torch.sigmoid(preds[i][0])) for i in range(len(mask_prompt))];
-        [ax[i + 1].text(0, -15, prompts[i]) for i in range(len(mask_prompt))];
 
     plt.imsave(temp_fpath, torch.sigmoid(preds[1][0]))
     img2 = cv2.imread(temp_fpath)
@@ -202,7 +292,7 @@ def predict(
 ):
     """
     function that will guess what the user desires through their prompt, to make sure it stays true
-    :param pipe:StableDiffusionInpaintingPipe the pipe used for image generation
+    :param pipe:StableDiffusionPowerPaintBrushNetPipeline the pipe used for image generation
     :param input_image:PIL.Image the image that needs modifications
     :param prompt:str the user prompt
     :param fitting_degree:float how much the result should fit the demand
@@ -252,7 +342,7 @@ def object_removal_with_instruct_inpainting(pipe, init_image, mask_image, negati
                                           num_inference_steps=50, guidance_scale=12):
     """
     calls the predict method to remove a given item from an image
-    :param pipe:StableDiffusionInpaintingPipe the model that modifies the image
+    :param pipe:StableDiffusionPowerPaintBrushNetPipeline the model that modifies the image
     :param init_image:PIL.Image the starting image
     :param mask_image:PIL.Image the mask image that indicates where the modifications need to be
     :param negative_prompt:list[str] what the result should NOT contain
@@ -279,7 +369,7 @@ def object_addition_with_instruct_inpainting(pipe, init_image, mask_image, promp
                                           num_inference_steps=50, guidance_scale=12):
     """
         calls the predict method to add or modifiy a given item from an image
-        :param pipe:StableDiffusionInpaintingPipe the model that modifies the image
+        :param pipe:StableDiffusionPowerPaintBrushNetPipeline the model that modifies the image
         :param init_image:PIL.Image the starting image
         :param mask_image:PIL.Image the mask image that indicates where the modifications need to be
         :param negative_prompt:list[str] what the result should NOT contain
@@ -300,3 +390,49 @@ def object_addition_with_instruct_inpainting(pipe, init_image, mask_image, promp
         "text-guided" # task
     )
     return image
+
+def generate_image(prompt, init_image_data, mask_data, out_file_name):
+    """
+    modifies elements inside the 'init_image' based on the given prompt, layer mask data, and saves it in the file 'out_file_name'
+    :param prompt:str the prompt for desired changes
+    :param init_image_data:binary an image encoded in binary
+    :param mask_data:binary a layer mask encoded in binary
+    :param out_file_name:str the name of the file in which we store the image
+    :return:utf-8 an image encoded in UTF-8
+    """
+    pipe = get_pipe()
+
+    binary = b64decode(mask_data.split(',')[1])
+    mask_image = PIL.Image.open(io.BytesIO(binary))
+    mask_image.save("mask1.png")
+    with_mask = np.array(plt.imread("mask1.png")[:,:,:3])
+
+    mask = (with_mask[:,:,0]==1)*(with_mask[:,:,1]==0)*(with_mask[:,:,2]==0)
+    plt.imshow(mask, cmap='gray')
+    plt.imsave("mask2.png", mask, cmap='gray')
+    mask_image = PIL.Image.open("mask2.png")
+    print("INFO : Mask obtained")
+
+    binary = b64decode(init_image_data.split(',')[1])
+    image = PIL.Image.open(io.BytesIO(binary))
+
+    if is_empty_mask(mask_image):
+      print('coucou')
+      mask_image = generate_mask_image(image, prompt, "mask.png")
+
+    split_prompt = prompt.lower().split(" ")
+    instruction = "add"
+    for word in split_prompt:
+      if word == "remove" or word == "delete" or word == "cut":
+        instruction = "remove"
+        break
+
+    if instruction == "remove":
+      image = object_removal_with_instruct_inpainting(pipe, image, mask_image.convert("RGB"), prompt)
+    else:
+      image = object_addition_with_instruct_inpainting(pipe, image, mask_image.convert("RGB"), prompt)
+
+    image.save(out_file_name)
+    encoded = base64.b64encode(open(out_file_name, "rb").read()).decode('utf-8')
+    print("INFO : image created and saved under the name",out_file_name)
+    return encoded
