@@ -7,3 +7,5 @@ pymongo
 python-dotenv
 bcrypt
 Flask-JWT-Extended
+spacy
+keyword-spacy
