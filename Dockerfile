@@ -9,14 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libssl-dev \
     && pip install --no-cache-dir -r requirements.txt \
+    && python -m spacy download en_core_web_sm \  # Download spaCy model
     && apt-get purge -y --auto-remove build-essential libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the rest of the application code
 COPY . .
-
-# Expose port 5000
-EXPOSE 5000
 
 # Run the application with Gunicorn, using Gevent workers
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--worker-class", "gevent", "app:app"]
