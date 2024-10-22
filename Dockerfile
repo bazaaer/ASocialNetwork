@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libssl-dev \
     && pip install --no-cache-dir -r requirements.txt \
-    && python -m spacy download en_core_web_sm \  # Download spaCy model
+    && python -m spacy download en_core_web_sm \
     && apt-get purge -y --auto-remove build-essential libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
