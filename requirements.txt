@@ -1,0 +1,6 @@
+diffusers==0.30.0
+ftfy
+accelerate
+transformers==4.45.1
+mmengine
+git-lfs
