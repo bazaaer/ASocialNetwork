@@ -1,4 +1,5 @@
 from flask import Blueprint
+from flask import Flask, request, jsonify
 
 # Create a blueprint
 api_blueprint = Blueprint('api', __name__)
@@ -64,13 +65,86 @@ def extract_keywords(prompt: str, amount_of_keywords: int = 10) -> Optional[List
     
     return most_common_keywords
 
-# Test the function
-prompt = ("On a sunny afternoon, a young boy wearing a red jacket plays joyfully with his small, "
-          "fluffy dog in the park. The trees sway gently in the breeze, and a few birds chirp melodiously "
-          "from the branches above. In the distance, an old man sits on a wooden bench, reading a newspaper. "
-          "Nearby, children laugh and chase each other near a sparkling fountain, while a street musician "
-          "plays a soothing melody on his guitar. The vibrant colors of the flowers and the calm atmosphere "
-          "make it a perfect day to relax and enjoy nature.")
 
-extracted_keywords = extract_keywords(prompt)
-print(extracted_keywords)
+@api_blueprint.route('/api/advise', methods=['POST'])
+def check_for_democraty():
+    """
+    Evaluates whether a given text aligns with the values of a militarized form of democracy found in the Helldivers 2 universe.
+
+    The function uses a pre-trained language model (Meta LLaMA) to generate an analysis of whether the input text supports the democratic ideals of the Helldivers 2 universe, which prioritize unity, loyalty, sacrifice for the greater good, and support for authority and hierarchy over individual freedoms. The model will determine if the input text is "Democratic Enough" and provide suggestions for improvement if not.
+
+    Parameters:
+    ----------
+    prompt : str
+        The input text to be evaluated for its alignment with the democratic ideals of the Helldivers 2 universe.
+    max_new_token : int, optional
+        The maximum number of tokens the model should generate for the response. Defaults to 1000.
+
+    Returns:
+    -------
+    str
+        The model's analysis of whether the text is democratic enough, along with any necessary suggestions to improve its alignment with the Helldivers 2 democratic values.
+    """
+    import torch
+    from transformers import pipeline
+
+    # Get prompt from POST
+    try:
+        prompt = request.json['prompt']
+    except:
+        prompt = "The text is missing."
+    try:
+        int(max_new_token = request.json['max_new_token'])
+    except:
+        max_new_token = 1000
+
+    # Check if CUDA is available
+    if torch.cuda.is_available():
+        device = 0  # Use GPU (cuda:0)
+    else:
+        device = -1  # Use CPU if GPU is not available
+
+    model_id = "meta-llama/Llama-3.2-3B-Instruct"
+
+    # Initialize the pipeline with GPU support (if available)
+    pipe = pipeline(
+        "text-generation",
+        model=model_id,
+        torch_dtype=torch.bfloat16,  # Use bfloat16 for better memory efficiency on GPU
+        device_map="auto",  # Automatically map to available devices
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": """You are an expert in evaluating whether a given text aligns with the strict, militarized form of democracy found in the Helldivers 2 universe. 
+            In this universe, democracy is centered around unity, loyalty, and the greater good, often prioritizing collective goals over individual freedoms. 
+            Your task is to analyze any text and determine if it promotes the values of Helldivers 2's democracy, which include:
+            
+            1. Emphasizing unity and loyalty to the collective above all else.
+            2. Promoting sacrifice for the greater good, where personal desires and individualism are secondary to the mission or democracy.
+            3. Reinforcing duty to maintain order, discipline, and service to the democratic cause.
+            4. Supporting the idea of a militaristic democracy where authority and hierarchy ensure collective success.
+            5. Condemning dissent or individualism if it threatens the unity or mission of the democracy.
+            
+            For each text, provide:
+            1. A detailed analysis explaining whether the text aligns with these values.
+            2. A final judgment of 'Democratic Enough' or 'Not Democratic Enough'.
+            3. If the text is 'Not Democratic Enough', suggest specific improvements or rephrasing to make it more aligned with the Helldivers 2 democratic ideals.
+            """
+        },
+        {
+            "role": "user", 
+            "content": f"{prompt}"
+        }
+    ]
+
+    # Generate text
+    outputs = pipe(
+        messages,
+        max_new_tokens=max_new_token,
+    )
+
+    # Output the generated pirate-speak response
+    response = outputs[0]["generated_text"][-1]['content']
+    return jsonify(response)
