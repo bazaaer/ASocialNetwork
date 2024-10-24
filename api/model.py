@@ -3,6 +3,8 @@ import spacy
 from typing import List, Optional
 from flask import Blueprint
 from flask import Flask, request, jsonify
+from dreambooth import DreamBooth
+
 
 # Create a blueprint
 api_blueprint = Blueprint('api', __name__)
@@ -231,3 +233,11 @@ def make_beter_prompt():
     response = outputs[0]["generated_text"][-1]['content']
 
     return jsonify({'improved_prompt': response})
+
+@api_blueprint.route('/api/dreambooth', methods=['POST'])
+def dreambooth():
+    data = request.json
+    dreambooth_model = Dreambooth(data['prompt'])
+    dreambooth_model.go()
+    
+    
