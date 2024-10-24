@@ -1,30 +1,31 @@
-# Use the official PyTorch image with CUDA 11.6 and Python 3.10
-FROM pytorch/pytorch:1.13.1-cuda11.6-cudnn8-runtime
+# Use the official PyTorch image with CUDA 11.7 and PyTorch 2.0
+FROM pytorch/pytorch:2.0.0-cuda11.7-cudnn8-runtime
 
 # Set the working directory
 WORKDIR /app
 
-# Install build dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     git \
     ninja-build \
     python3-dev \
-    libpthread-stubs0-dev \
+    libffi-dev \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file
 COPY requirements.txt ./
 
+# Upgrade pip
+RUN pip install --upgrade pip
+
 # Install Python packages
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install xformers from prebuilt wheel
-RUN pip install --no-cache-dir xformers==0.0.16 --extra-index-url https://download.pytorch.org/whl/cu116
-
-# Remove build dependencies
-RUN apt-get purge -y --auto-remove build-essential cmake git ninja-build python3-dev libpthread-stubs0-dev
+# Download spaCy model (if needed)
+RUN python -m spacy download en_core_web_sm
 
 # Copy the rest of the application code
 COPY . .
