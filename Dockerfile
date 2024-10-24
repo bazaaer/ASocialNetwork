@@ -4,18 +4,27 @@ FROM pytorch/pytorch:1.13.1-cuda11.6-cudnn8-runtime
 # Set the working directory
 WORKDIR /app
 
-# Copy the requirements file
-COPY requirements.txt ./
-
-# Install build dependencies and Python packages
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     git \
     ninja-build \
-    && pip install --no-cache-dir -r requirements.txt \
-    && apt-get purge -y --auto-remove build-essential cmake git ninja-build \
+    python3-dev \
+    libpthread-stubs0-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy the requirements file
+COPY requirements.txt ./
+
+# Install Python packages
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install xformers from prebuilt wheel
+RUN pip install --no-cache-dir xformers==0.0.16 --extra-index-url https://download.pytorch.org/whl/cu116
+
+# Remove build dependencies
+RUN apt-get purge -y --auto-remove build-essential cmake git ninja-build python3-dev libpthread-stubs0-dev
 
 # Copy the rest of the application code
 COPY . .
