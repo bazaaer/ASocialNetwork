@@ -23,7 +23,7 @@ class Utils:
     @staticmethod
     def download_image(url):
         response = requests.get(url)
-        return Image.open(BytesIO(response.content)).convert("RGB")
+        return Image.open(BytesIO(response.content)).convert("RGB").resize((512, 512))
 
     @staticmethod
     def image_grid(imgs, rows, cols):
