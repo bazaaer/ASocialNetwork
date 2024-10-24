@@ -18,7 +18,7 @@ class Img2Img:
         """
         Initialize the model
         """
-        self.model_id = "stabilityai/stable-diffusion-2-inpainting"
+        self.model_id = "stabilityai/stable-diffusion-2-1-base"
         self.img2img_pipe = StableDiffusionImg2ImgPipeline.from_pretrained(self.model_id, variant="fp16",
                                                                       use_safetensors=True).to(device)
 
