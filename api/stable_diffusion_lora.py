@@ -1,6 +1,6 @@
 # stable_diffusion_model.py
 
-from diffusers import StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
+from diffusers import StableDiffusionPipeline
 import torch
 
 class StableDiffusionModel:
@@ -50,7 +50,7 @@ class StableDiffusionModel:
         self.text2img_pipe.to(self.device)
         print("Moved model to GPU for inference.")
 
-    def generate_text_to_image(self, prompt, negative_prompt=None, guidance_scale=7, num_inference_steps=31, seed=None):
+    def generate_text_to_image(self, prompt, negative_prompt, guidance_scale, num_inference_steps, seed=None):
         """
         Generate an image from a text prompt using the Text-to-Image pipeline.
         """
