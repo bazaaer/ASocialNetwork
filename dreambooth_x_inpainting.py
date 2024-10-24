@@ -1,34 +1,42 @@
 import os
+import shutil
+import subprocess
 
-os.system("gdown 1CC0YdBBPjqy1dyW6kNfH5qwmLJnlXGhR")
-os.system("pip install -qqU dreambooth_inpainting_requirements.txt")
+subprocess.run("gdown 1CC0YdBBPjqy1dyW6kNfH5qwmLJnlXGhR")
+subprocess.run("pip install -r ./dreambooth_inpainting_requirements.txt", shell=True)
 
 from diffusers import StableDiffusionInpaintPipeline
 import torch
-from utils import download_image, store_images
-#from accelerate import Accelerator
-#from accelerate.logging import get_logger
+from Utils import Utils
 
 IMAGES = [
-    download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_1.png"),
-    download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_2.png"),
-    download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_3.png"),
-    download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_4.png"),
-    download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_eagle.png"),
-    download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_intro.png"),
-    download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_pose.png"),
-    download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_salute.png"),
-    download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_thumb.png")
+    Utils.download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_1.png"),
+    Utils.download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_2.png"),
+    Utils.download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_3.png"),
+    Utils.download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_4.png"),
+    Utils.download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_eagle.png"),
+    Utils.download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_intro.png"),
+    Utils.download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_pose.png"),
+    Utils.download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_salute.png"),
+    Utils.download_image("https://raw.githubusercontent.com/ArsGoe/onlinestock/dreambooth_x_inpainting/helldivers_thumb.png")
 ]
 
 def training(images=IMAGES, model_name="runwayml/stable-diffusion-inpainting", class_name="helldiver"):
-    store_images(images, "./content/dreambooth_inpainting_in")
+    Utils.store_images(images, "./content/dreambooth_inpainting_in")
+    out_images_path = f"./content/dreambooth_inpainting_out_{class_name}"
+    if os.path.exists(out_images_path):
+        shutil.rmtree(out_images_path)
+    os.makedirs(out_images_path)
+    class_images_path = f"./content/dreambooth_inpainting_class_images_{class_name}"
+    if os.path.exists(class_images_path):
+        shutil.rmtree(class_images_path)
+    os.makedirs(class_images_path)
     command = "accelerate launch train_dreambooth_inpaint.py " \
             + f"--pretrained_model_name_or_path={model_name} " \
             + "--instance_data_dir=./content/dreambooth_inpainting_in " \
-            + f"--class_data_dir=./content/dreambooth_inpainting_class_images_{class_name} " \
-            + f"--output_dir=./content/dreambooth_inpainting_out_{class_name} " \
-            + "--with_prior_preservation" \
+            + f"--class_data_dir={class_images_path} " \
+            + f"--output_dir={out_images_path} " \
+            + "--with_prior_preservation " \
             + "--prior_loss_weight=1.0 " \
             + f"--instance_prompt='a photo of dpf {class_name}' " \
             + f"--class_prompt='a photo of {class_name}' " \
@@ -40,12 +48,12 @@ def training(images=IMAGES, model_name="runwayml/stable-diffusion-inpainting", c
             + "--lr_scheduler='constant' " \
             + "--lr_warmup_steps=0 " \
             + "--num_class_images=200 " \
-            + "--max_train_steps=1200 " \
+            + "--max_train_steps=400 " \
             + "--train_text_encoder " \
             + "--checkpointing_steps=4000"
-    os.system(command)
+    subprocess.run(command, shell=True)
     return StableDiffusionInpaintPipeline.from_pretrained(
-            "./content/dreambooth_inpainting_out_helldiver",
+            out_images_path,
             torch_dtype=torch.float16
         ).to("cuda")
 
@@ -61,8 +69,8 @@ class DreamboothXInpainting:
             self.pipeline = training(images=images, class_name=class_name)
         self.class_name = class_name
 
-    def generate_image_dreambooth_x_inpainting(self, prompt, init_image, mask_image):
+    def generate_image_dreambooth_x_inpainting(self, prompt, init_image, mask_image, num_inference_steps=150):
         if f"a photo of dpf {self.class_name}" not in prompt:
             prompt = f"a photo of dpf {self.class_name} {prompt}"
-        image = self.pipeline(prompt, image=init_image, mask_image=mask_image, num_inference_steps=150).images
+        image = self.pipeline(prompt, image=init_image, mask_image=mask_image, num_inference_steps=num_inference_steps).images
         return image
