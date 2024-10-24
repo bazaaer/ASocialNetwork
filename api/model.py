@@ -3,9 +3,71 @@ import spacy
 from typing import List, Optional
 from flask import Blueprint
 from flask import Flask, request, jsonify
+from flask import Flask, request, send_file, Blueprint
+from io import BytesIO
+from stable_diffusion_lora import StableDiffusionModel
+from flask_jwt_extended import jwt_required
+
 
 # Create a blueprint
 api_blueprint = Blueprint('api', __name__)
+
+# Path to the LoRA file
+lora_weights_path = "helldivers.safetensors"  # Replace with your actual LoRA file path
+
+# Initialize the model with LoRA
+model = StableDiffusionModel(use_lora=True, lora_weights_path=lora_weights_path)
+
+# Fixed base prompt and negative prompt
+BASE_PROMPT = "black armor, 1man, helldiver, upper body, profile picture, cape, yellow accents, explosion, fire, laser, in a battlefield where the sky is red and black, blood and oil spilled armor"
+NEGATIVE_PROMPT = "bad anatomy, bad hands, poorly drawn face, poorly drawn hands, missing limb, out of focus, monochrome, symbol, text, logo, lowres, censored, signature"
+
+# Fixed guidance scale and number of inference steps
+GUIDANCE_SCALE = 7
+NUM_INFERENCE_STEPS = 31
+
+@api_blueprint.route('/api/text2profileimg', methods=['POST'])
+@jwt_required()
+def generate_profile_image():
+    data = request.get_json()
+
+    # Get the user's additional prompt (optional)
+    user_additional_prompt = data.get('additional_prompt', '').strip()
+
+    # Combine the base prompt with the user's additional prompt if provided
+    if user_additional_prompt:
+        full_prompt = f"{BASE_PROMPT}, {user_additional_prompt}"
+    else:
+        full_prompt = BASE_PROMPT
+
+    # Optionally, get the seed (if provided)
+    seed = data.get('seed', None)
+    if seed is not None:
+        try:
+            seed = int(seed)
+        except ValueError:
+            return jsonify({'error': 'Seed must be an integer.'}), 400
+
+    # Generate the image
+    try:
+        image = model.generate_text_to_image(
+            prompt=full_prompt,
+            negative_prompt=NEGATIVE_PROMPT,
+            guidance_scale=GUIDANCE_SCALE,
+            num_inference_steps=NUM_INFERENCE_STEPS,
+            seed=seed
+        )
+    except Exception as e:
+        print(f"Error during image generation: {e}")
+        return jsonify({'error': 'An error occurred during image generation.'}), 500
+
+    # Save the image to a BytesIO object
+    img_io = BytesIO()
+    image.save(img_io, 'JPEG')
+    img_io.seek(0)
+
+    # Return the image in the response
+    return send_file(img_io, mimetype='image/jpeg')
 
 
 @api_blueprint.route('/api', methods=['GET'])
