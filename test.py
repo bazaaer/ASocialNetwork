@@ -1,5 +1,8 @@
 from diffusers import StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
 import torch
+from PIL import Image
+from io import BytesIO
+import requests
 
 class StableDiffusionModel:
     def __init__(self, use_lora=False, lora_weights_path=None, base_model="sd-legacy/stable-diffusion-v1-5"):
@@ -54,16 +57,17 @@ class StableDiffusionModel:
         # Generate the image
         image = self.text2img_pipe(prompt, negative_prompt=negative_prompt, guidance_scale=guidance_scale, num_inference_steps=num_inference_steps).images[0]
         return image
+    
 
-
-# Path to the downloaded LoRA file
+    # Path to the downloaded LoRA file
 lora_weights_path = "helldivers.safetensors"  # Replace with your actual LoRA file path
 
 # Initialize the model with LoRA
 model = StableDiffusionModel(use_lora=True, lora_weights_path=lora_weights_path)
 
+
 # Define the prompt and negative prompt
-prompt = "helldiver on a horse, 1man, 1horse, profile picture, cape, yellow accents, laser, battlefield, action, sci-fi, futuristic, video game, fanart, realistic, detailed, highres, moon in background"
+prompt = "black armor, 1man, upper body, profile picture, cape, yellow accents, explosion, fire, laser, in a battlefield where the sky is red and black, blood and oil spilled armor"
 negative_prompt = "bad anatomy, bad hands, poorly drawn face, poorly drawn hands, missing limb, out of focus, monochrome, symbol, text, logo, lowres, censored, signature"
 
 # Set parameters
