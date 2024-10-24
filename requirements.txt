@@ -9,7 +9,6 @@ bcrypt
 Flask-JWT-Extended
 spacy
 keyword-spacy
-torch
 diffusers
 transformers
 Pillow

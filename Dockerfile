@@ -7,11 +7,14 @@ WORKDIR /app
 # Copy the requirements file
 COPY requirements.txt ./
 
-# Install dependencies
+# Install build dependencies and Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
     git \
+    ninja-build \
     && pip install --no-cache-dir -r requirements.txt \
-    && apt-get purge -y --auto-remove git \
+    && apt-get purge -y --auto-remove build-essential cmake git ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the rest of the application code
