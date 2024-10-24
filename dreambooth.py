@@ -1,4 +1,4 @@
-#@title Import required libraries
+
 import argparse
 import itertools
 import math
@@ -8,7 +8,7 @@ import random
 import gc
 import Path
 from argparse import Namespace
-
+from Utils import Utils
 import accelerate
 
 import numpy as np
@@ -35,29 +35,12 @@ import bitsandbytes as bnb
 
 pretrained_model_name_or_path = "stable-diffusion-v1-5/stable-diffusion-v1-5" #@param ["stabilityai/stable-diffusion-2", "stabilityai/stable-diffusion-2-base", "CompVis/stable-diffusion-v1-4", "stable-diffusion-v1-5/stable-diffusion-v1-5"] {allow-input: true}
 
-def download_image(url):
-    try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an error for bad responses
-        var = Image.open(BytesIO(response.content)).convert("RGB")
-        var = var.resize((512,512))
-        print(var.size)  # Correctly accessing size
-        return var
-    except Exception as e:
-        print(f"Error fetching image from {url}: {e}")
-        return None
 
-def image_grid(imgs, rows, cols):
-    assert len(imgs) == rows*cols
 
-    w, h = imgs[0].size
-    grid = Image.new('RGB', size=(cols*w, rows*h))
-    grid_w, grid_h = grid.size
-
-    for i, img in enumerate(imgs):
-        grid.paste(img, box=(i%cols*w, i//cols*h))
-    return grid
-
+"""
+This Class is the representation of the Dreambooth Finetuning pipeline
+We use a stable diffusion model as a base and we have images on top of it with this pipeline
+"""
 class DreamBooth():
     def __init__(self,
                  save_path="/my_concept",
@@ -93,6 +76,10 @@ class DreamBooth():
         self.pipe = None
 
     def class_images(self):
+        """
+        this is to generate class images if the prior_preservation parameter is true
+        :return:
+        """
         if self.prior_preservation:
             class_images_dir = Path(self.class_data_root)
             if not class_images_dir.exists():
@@ -124,6 +111,11 @@ class DreamBooth():
                     torch.cuda.empty_cache()
 
     def load_model(self):
+        """
+        this method is used to get the differents values from our pretrained model we use
+        we'll then use them later on in the training
+        :return:
+        """
         self.text_encoder = CLIPTextModel.from_pretrained(
             pretrained_model_name_or_path, subfolder="text_encoder"
         )
@@ -139,6 +131,11 @@ class DreamBooth():
         )
 
     def setting_up_args(self):
+        """
+        the setting_up_args() method is used to generate arguments for the training loop
+        it create parameters such as the learning_rate and the train_batch_size
+        :return:
+        """
         self.args = Namespace(
             pretrained_model_name_or_path=pretrained_model_name_or_path,
             resolution=self.vae.sample_size,
@@ -168,6 +165,10 @@ class DreamBooth():
         )
 
     def training_function(self):
+        """
+        this is the definition of the training loop we'll use later
+        :return:
+        """
         logger = get_logger(__name__)
 
         set_seed(self.args.seed)
@@ -394,6 +395,11 @@ class DreamBooth():
             pipeline.save_pretrained(self.args.output_dir)
 
     def training(self):
+        """
+        this method is the training part of the class, it is about the training of the stable diffusion
+        model on our images.
+        :return:
+        """
         accelerate.notebook_launcher(self.training_function, args=(self.text_encoder, self.vae, self.unet), num_processes=1)
         for param in itertools.chain(self.unet.parameters(), self.text_encoder.parameters()):
             if param.grad is not None:
@@ -401,6 +407,11 @@ class DreamBooth():
             torch.cuda.empty_cache()
 
     def set_pipeline(self):
+        """
+        this is used to set the pipeline used later in the generation of the image
+        if it does not exist already it makes a new one based on the training we just did
+        :return:
+        """
         try:
             self.pipe
         except NameError:
@@ -410,7 +421,13 @@ class DreamBooth():
                 torch_dtype=torch.float16,
             ).to("cuda")
 
+
     def run(self):
+        """
+        this method is to run the fine-tuned model on a prompt given by the user.
+        it prints out the grid of images made in the end.
+        :return:
+        """
 
         all_images = []
         for _ in range(self.num_rows):
@@ -418,10 +435,15 @@ class DreamBooth():
                           negative_prompt="game interface, real flags").images
             all_images.extend(images)
 
-        grid = image_grid(all_images, self.num_rows, self.num_samples)
+        grid = Utils.image_grid(all_images, self.num_rows, self.num_samples)
         print(grid)
 
     def go(self):
+        """
+        this method is used to make the class work, it calls every method in the right order
+        it gets images from a github to train the model to reproduce the style of helldiver.
+        :return: NOTHING
+        """
         urls = [
             "https://raw.githubusercontent.com/ArsGoe/onlinestock/main/1708423785-9799-capture-d-ecran_1.png",
             "https://raw.githubusercontent.com/ArsGoe/onlinestock/main/AUT_Berserker_Renders_Thumbnail_2.png",
@@ -436,13 +458,14 @@ class DreamBooth():
             "https://raw.githubusercontent.com/ArsGoe/onlinestock/main/Helldivers-2-Automaton-Hulk_1.png"
         ]
 
-        images = list(filter(None, [download_image(url) for url in urls]))
+        images = list(filter(None, [Utils.download_image(url) for url in urls]))
         save_path = "./my_concept"
         if not os.path.exists(save_path):
             os.mkdir(save_path)
 
         [image.save(f"{save_path}/{i}.jpeg") for i, image in enumerate(images)]
-        image_grid(images, 1, len(images))
+        Utils.image_grid(images, 1, len(images))
+
         self.class_images()
         self.load_model()
         self.setting_up_args()
