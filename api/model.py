@@ -48,13 +48,22 @@ def generate_profile_image():
         except ValueError:
             return jsonify({'error': 'Seed must be an integer.'}), 400
 
+    # Get num_inference_steps from user input, default to 31
+    num_inference_steps = data.get('num_inference_steps', 31)
+    try:
+        num_inference_steps = int(num_inference_steps)
+        if num_inference_steps <= 0:
+            raise ValueError("num_inference_steps must be a positive integer.")
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
     # Generate the image
     try:
         image = model.generate_text_to_image(
             prompt=full_prompt,
             negative_prompt=NEGATIVE_PROMPT,
             guidance_scale=GUIDANCE_SCALE,
-            num_inference_steps=NUM_INFERENCE_STEPS,
+            num_inference_steps=num_inference_steps,
             seed=seed
         )
     except Exception as e:
