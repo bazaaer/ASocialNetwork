@@ -24,7 +24,7 @@ RUN pip install --upgrade pip
 # Install Python packages
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download spaCy model (if needed)
+# Download spaCy model
 RUN python -m spacy download en_core_web_sm
 
 # Copy the rest of the application code
