@@ -1,5 +1,5 @@
-# Use the official PyTorch image with CUDA 11.7 and Python 3.10
-FROM pytorch/pytorch:1.13.1-cuda11.7-cudnn8-runtime
+# Use the official PyTorch image with CUDA 11.6 and Python 3.10
+FROM pytorch/pytorch:1.13.1-cuda11.6-cudnn8-runtime
 
 # Set the working directory
 WORKDIR /app
@@ -7,13 +7,11 @@ WORKDIR /app
 # Copy the requirements file
 COPY requirements.txt ./
 
-# Install build dependencies and Python packages
+# Install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
     git \
     && pip install --no-cache-dir -r requirements.txt \
-    && apt-get purge -y --auto-remove build-essential cmake git \
+    && apt-get purge -y --auto-remove git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the rest of the application code
