@@ -1,21 +1,30 @@
-# Use a slimmed-down Python runtime as a base image
-FROM python:3.11-slim
+# Use the official PyTorch image with CUDA 11.7 and Python 3.10
+FROM pytorch/pytorch:1.13.1-cuda11.7-cudnn8-runtime
+
+# Set the working directory
+WORKDIR /app
 
 # Copy the requirements file
 COPY requirements.txt ./
 
-# Install build dependencies for any Python packages that may need compilation
+# Install build dependencies and Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    libssl-dev \
+    cmake \
+    git \
     && pip install --no-cache-dir -r requirements.txt \
-    && python -m spacy download en_core_web_sm \
-    && apt-get purge -y --auto-remove build-essential libssl-dev \
-    && python3 -m spacy download en_core_web_sm \
+    && apt-get purge -y --auto-remove build-essential cmake git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the rest of the application code
 COPY . .
 
-# Run the application with Gunicorn, using Gevent workers
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--worker-class", "gevent", "app:app"]
+# Expose the port (optional)
+EXPOSE 5000
+
+# Create a non-root user and switch to it
+RUN useradd -m appuser
+USER appuser
+
+# Run the application with Gunicorn, using a single worker
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--worker-class", "sync", "app:app"]

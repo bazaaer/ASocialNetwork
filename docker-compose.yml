@@ -1,22 +1,55 @@
+version: "3.8"
+
 services:
   KL-backend:
     image: ghcr.io/bazaaer/asocialnetwork-api:latest
+    environment:
+      - MONGO_USER=${MONGO_USER}
+      - MONGO_PASSWORD=${MONGO_PASSWORD}
+      - MONGO_HOST=${MONGO_HOST}
+      - MONGO_PORT=${MONGO_PORT}
     env_file:
       - .env
     labels:
       - "traefik.enable=true"
       # Backend
-      - "traefik.http.routers.KL-backend.rule=Host(`${HOSTNAME}`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.KL-backend.entrypoints=websecure"
-      - "traefik.http.services.KL-backend.loadbalancer.server.port=5000"
-      - "traefik.http.routers.KL-backend.tls=true"
-      - "traefik.http.routers.KL-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.backend.rule=Host(`${HOSTNAME}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.services.backend.loadbalancer.server.port=5000"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
     deploy:
-      replicas: 2  # Duplicates the service to run 2 instances
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+      replicas: 1  # Set replicas to 1 for GPU-bound application
     restart: unless-stopped
     networks:
       - traefik
+    device_requests:
+      - driver: nvidia
+        count: 1
+        capabilities: [gpu]
+    depends_on:
+      - mongodb  # Optional, if the backend depends on MongoDB
+
+  mongodb:
+    image: mongo:6
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - internal_network
+
+volumes:
+  mongodb_data:
 
 networks:
   traefik:
     external: true
+  internal_network:
+    driver: bridge
