@@ -1,8 +1,7 @@
-version: "3.8"
-
 services:
-  KL-backend:
+  backend:
     image: ghcr.io/bazaaer/asocialnetwork-api:latest
+    runtime: nvidia  # Use NVIDIA runtime for GPU support
     environment:
       - MONGO_USER=${MONGO_USER}
       - MONGO_PASSWORD=${MONGO_PASSWORD}
@@ -10,29 +9,11 @@ services:
       - MONGO_PORT=${MONGO_PORT}
     env_file:
       - .env
-    labels:
-      - "traefik.enable=true"
-      # Backend
-      - "traefik.http.routers.backend.rule=Host(`${HOSTNAME}`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.services.backend.loadbalancer.server.port=5000"
-      - "traefik.http.routers.backend.tls=true"
-      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
-      replicas: 1  # Set replicas to 1 for GPU-bound application
     restart: unless-stopped
     networks:
       - traefik
-    device_requests:
-      - driver: nvidia
-        count: 1
-        capabilities: [gpu]
     depends_on:
-      - mongodb  # Optional, if the backend depends on MongoDB
+      - mongodb
 
   mongodb:
     image: mongo:6

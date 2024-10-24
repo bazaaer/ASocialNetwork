@@ -18,11 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy the requirements file
 COPY requirements.txt ./
 
-# Upgrade pip
+# Upgrade pip and install Python packages
 RUN pip install --upgrade pip
-
-# Install Python packages
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade --no-cache-dir -r requirements.txt
 
 # Download spaCy model
 RUN python -m spacy download en_core_web_sm
@@ -38,4 +36,4 @@ RUN useradd -m appuser
 USER appuser
 
 # Run the application with Gunicorn, using a single worker
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--worker-class", "sync", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "app:app"]
